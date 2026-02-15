@@ -1,0 +1,42 @@
+name: Build and Upload
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build ${{ matrix.build_type }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Static, Shared]
+        include:
+          - build_type: Static
+            shared_libs: OFF
+          - build_type: Shared
+            shared_libs: ON
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Checkout Ogg
+      uses: actions/checkout@v4
+      with:
+        repository: xiph/ogg
+        path: ogg
+
+    - name: Configure CMake
+      run: cmake -B build -S . -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install -DBUILD_SHARED_LIBS=${{ matrix.shared_libs }} -DWITH_OGG=ON
+
+    - name: Build
+      run: cmake --build build --config Release --parallel
+
+    - name: Install
+      run: cmake --install build --config Release
+
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: flac-windows-${{ matrix.build_type }}
+        path: ${{ github.workspace }}/install
