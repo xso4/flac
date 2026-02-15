@@ -26,6 +26,9 @@ jobs:
         repository: xiph/ogg
         path: ogg
 
+    - name: Install Pandoc
+      run: choco install pandoc -y
+
     - name: Configure CMake
       run: cmake -B build -S . -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install -DBUILD_SHARED_LIBS=${{ matrix.shared_libs }} -DWITH_OGG=ON
 
