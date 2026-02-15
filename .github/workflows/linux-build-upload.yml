@@ -1,68 +1,65 @@
-name: Build and Upload (MinGW)
+name: Linux MinGW Build
 
 on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
   workflow_dispatch:
 
 jobs:
   build:
-    name: Build ${{ matrix.build_type }}
+    name: Build ${{ matrix.arch }} ${{ matrix.lib_type }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
+        arch: [x86_64, i686]
+        lib_type: [static, shared]
         include:
-          - build_type: static
-            cmake_shared: OFF
-          - build_type: shared
-            cmake_shared: ON
+          - arch: x86_64
+            compiler_prefix: x86_64-w64-mingw32
+          - arch: i686
+            compiler_prefix: i686-w64-mingw32
+          - lib_type: static
+            shared_flag: OFF
+          - lib_type: shared
+            shared_flag: ON
 
     steps:
     - uses: actions/checkout@v4
-
+    
     - name: Checkout Ogg
       uses: actions/checkout@v4
       with:
         repository: xiph/ogg
-        path: ogg-dep
+        path: ogg
 
-    - name: Install MinGW-w64 and Ninja
+    - name: Install MinGW
       run: |
         sudo apt-get update
-        sudo apt-get install -y mingw-w64 cmake ninja-build nasm
+        sudo apt-get install -y mingw-w64 cmake ninja-build
 
-    - name: Build and Install Ogg
-      run: |
-        cmake -S ogg-dep -B build-ogg \
-          -G Ninja \
-          -DCMAKE_SYSTEM_NAME=Windows \
-          -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc \
-          -DCMAKE_RC_COMPILER=x86_64-w64-mingw32-windres \
-          -DCMAKE_INSTALL_PREFIX=$(pwd)/install \
-          -DBUILD_SHARED_LIBS=${{ matrix.cmake_shared }}
-        cmake --build build-ogg
-        cmake --install build-ogg
-
-    - name: Configure FLAC
+    - name: Configure CMake
       run: |
         cmake -S . -B build \
           -G Ninja \
           -DCMAKE_SYSTEM_NAME=Windows \
-          -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc \
-          -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++ \
-          -DCMAKE_RC_COMPILER=x86_64-w64-mingw32-windres \
-          -DCMAKE_INSTALL_PREFIX=$(pwd)/install \
-          -DCMAKE_PREFIX_PATH=$(pwd)/install \
-          -DBUILD_SHARED_LIBS=${{ matrix.cmake_shared }} \
+          -DCMAKE_C_COMPILER=${{ matrix.compiler_prefix }}-gcc \
+          -DCMAKE_CXX_COMPILER=${{ matrix.compiler_prefix }}-g++ \
+          -DCMAKE_RC_COMPILER=${{ matrix.compiler_prefix }}-windres \
+          -DBUILD_SHARED_LIBS=${{ matrix.shared_flag }} \
+          -DCMAKE_INSTALL_PREFIX=install \
           -DWITH_OGG=ON
 
-    - name: Build FLAC
+    - name: Build
       run: cmake --build build
 
-    - name: Install FLAC
+    - name: Install
       run: cmake --install build
 
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: flac-windows-x64-${{ matrix.build_type }}
-        path: install/
+        name: flac-${{ matrix.arch }}-${{ matrix.lib_type }}
+        path: install
