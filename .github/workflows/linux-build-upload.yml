@@ -26,7 +26,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y autoconf automake libtool pkg-config gettext make mingw-w64
+          sudo apt-get install -y autoconf automake libtool libtool-bin pkg-config gettext make mingw-w64
       - name: Prepare build
         run: |
           ./autogen.sh
