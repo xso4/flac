@@ -1,61 +1,65 @@
-name: Linux MinGW Build
+name: Linux MinGW Build and Upload
 
 on:
   workflow_dispatch:
 
 jobs:
   build:
-    name: Build ${{ matrix.arch }} ${{ matrix.lib_type }}
+    name: Build ${{ matrix.build_type }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        arch: [x86_64, i686]
-        lib_type: [static, shared]
         include:
-          - arch: x86_64
-            compiler_prefix: x86_64-w64-mingw32
-          - arch: i686
-            compiler_prefix: i686-w64-mingw32
-          - lib_type: static
-            shared_flag: OFF
-          - lib_type: shared
-            shared_flag: ON
-
+          - build_type: static
+            configure_args: --enable-static --disable-shared
+            cflags: -O2 -DFLAC__NO_DLL
+            ldflags: -static -static-libgcc -static-libstdc++
+            artifact_name: flac-windows-mingw-static
+          - build_type: dynamic
+            configure_args: --enable-shared --disable-static
+            cflags: -O2
+            ldflags: ""
+            artifact_name: flac-windows-mingw-dynamic
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Checkout Ogg
-      uses: actions/checkout@v4
-      with:
-        repository: xiph/ogg
-        path: ogg
-
-    - name: Install MinGW
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y mingw-w64 cmake ninja-build
-
-    - name: Configure CMake
-      run: |
-        cmake -S . -B build \
-          -G Ninja \
-          -DCMAKE_SYSTEM_NAME=Windows \
-          -DCMAKE_C_COMPILER=${{ matrix.compiler_prefix }}-gcc \
-          -DCMAKE_CXX_COMPILER=${{ matrix.compiler_prefix }}-g++ \
-          -DCMAKE_RC_COMPILER=${{ matrix.compiler_prefix }}-windres \
-          -DBUILD_SHARED_LIBS=${{ matrix.shared_flag }} \
-          -DCMAKE_INSTALL_PREFIX=install \
-          -DWITH_OGG=ON
-
-    - name: Build
-      run: cmake --build build
-
-    - name: Install
-      run: cmake --install build
-
-    - name: Upload Artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: flac-${{ matrix.arch }}-${{ matrix.lib_type }}
-        path: install
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y autoconf automake libtool pkg-config gettext make mingw-w64
+      - name: Prepare build
+        run: |
+          ./autogen.sh
+      - name: Configure
+        run: |
+          HOST=x86_64-w64-mingw32
+          BUILD=$(./config.guess)
+          mkdir build-${{ matrix.build_type }}
+          cd build-${{ matrix.build_type }}
+          CC=${HOST}-gcc \
+          CXX=${HOST}-g++ \
+          AR=${HOST}-ar \
+          RANLIB=${HOST}-ranlib \
+          STRIP=${HOST}-strip \
+          WINDRES=${HOST}-windres \
+          CFLAGS="${{ matrix.cflags }}" \
+          LDFLAGS="${{ matrix.ldflags }}" \
+          ../configure \
+            --host=$HOST \
+            --build=$BUILD \
+            --prefix=$(pwd)/install \
+            --disable-ogg \
+            ${{ matrix.configure_args }}
+      - name: Build
+        run: |
+          cd build-${{ matrix.build_type }}
+          make -j$(nproc)
+      - name: Install
+        run: |
+          cd build-${{ matrix.build_type }}
+          make install
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: build-${{ matrix.build_type }}/install/
