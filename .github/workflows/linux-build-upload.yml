@@ -19,12 +19,30 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Checkout Ogg
+      uses: actions/checkout@v4
+      with:
+        repository: xiph/ogg
+        path: ogg-dep
+
     - name: Install MinGW-w64 and Ninja
       run: |
         sudo apt-get update
-        sudo apt-get install -y mingw-w64 cmake ninja-build
+        sudo apt-get install -y mingw-w64 cmake ninja-build nasm
 
-    - name: Configure CMake
+    - name: Build and Install Ogg
+      run: |
+        cmake -S ogg-dep -B build-ogg \
+          -G Ninja \
+          -DCMAKE_SYSTEM_NAME=Windows \
+          -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc \
+          -DCMAKE_RC_COMPILER=x86_64-w64-mingw32-windres \
+          -DCMAKE_INSTALL_PREFIX=$(pwd)/install \
+          -DBUILD_SHARED_LIBS=${{ matrix.cmake_shared }}
+        cmake --build build-ogg
+        cmake --install build-ogg
+
+    - name: Configure FLAC
       run: |
         cmake -S . -B build \
           -G Ninja \
@@ -32,17 +50,19 @@ jobs:
           -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc \
           -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++ \
           -DCMAKE_RC_COMPILER=x86_64-w64-mingw32-windres \
-          -DCMAKE_INSTALL_PREFIX=install \
-          -DBUILD_SHARED_LIBS=${{ matrix.cmake_shared }}
+          -DCMAKE_INSTALL_PREFIX=$(pwd)/install \
+          -DCMAKE_PREFIX_PATH=$(pwd)/install \
+          -DBUILD_SHARED_LIBS=${{ matrix.cmake_shared }} \
+          -DWITH_OGG=ON
 
-    - name: Build
+    - name: Build FLAC
       run: cmake --build build
 
-    - name: Install
-      run: cmake --install build --prefix install
+    - name: Install FLAC
+      run: cmake --install build
 
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: ogg-windows-x64-${{ matrix.build_type }}
+        name: flac-windows-x64-${{ matrix.build_type }}
         path: install/
